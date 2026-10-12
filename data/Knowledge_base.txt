@@ -1,0 +1,7 @@
+Artificial Intelligence is a branch of computer science that enables machines to perform tasks that normally require human intelligence.
+
+Generative AI is a type of artificial intelligence that can generate new content such as text, images, code and audio.
+
+Large Language Models are AI models trained on large amounts of text data. They can understand and generate human-like text.
+
+Retrieval-Augmented Generation, or RAG, combines information retrieval with a Large Language Model. It first retrieves relevant information from a knowledge base and then uses that information to generate an answer.
