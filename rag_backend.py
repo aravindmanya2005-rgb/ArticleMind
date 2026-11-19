@@ -1,254 +1,271 @@
+
 import os
-import pandas as pd
+from pathlib import Path
+
 import chromadb
+import pandas as pd
+import streamlit as st
+from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
-from langchain_ollama import OllamaLLM
+from langchain_groq import ChatGroq
 
 
-# ==========================================================
-# PROJECT PATHS
-# ==========================================================
+# ==================================================
+# 1. CONFIGURATION
+# ==================================================
 
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
+CSV_PATH = BASE_DIR / "data" / "train.csv"
+CHROMA_PATH = BASE_DIR / "chroma_db"
+
+
+# ==================================================
+# 2. GROQ API KEY AND LANGUAGE MODEL
+# ==================================================
+
+def get_groq_api_key():
+    try:
+        key = st.secrets.get("GROQ_API_KEY", "")
+        if key:
+            return key
+    except Exception:
+        pass
+
+    return os.getenv("GROQ_API_KEY", "")
+
+
+api_key = get_groq_api_key()
+
+if not api_key:
+    raise RuntimeError(
+        "Groq API key missing. Add GROQ_API_KEY to your "
+        "project's .env file or Streamlit Cloud Secrets."
+    )
+
+llm = ChatGroq(
+    model="openai/gpt-oss-120b",
+    groq_api_key=api_key,
+    temperature=0.2,
+    max_tokens=1024,
+    timeout=60,
+    max_retries=2,
 )
 
-CSV_PATH = os.path.join(
-    BASE_DIR,
-    "data",
-    "train.csv"
-)
 
-CHROMA_PATH = os.path.join(
-    BASE_DIR,
-    "chroma_db"
-)
+# ==================================================
+# 3. LOAD ARTICLE DATASET
+# ==================================================
 
-
-# ==========================================================
-# LOAD DATASET
-# ==========================================================
-
-print("Loading dataset...")
+if not CSV_PATH.exists():
+    raise FileNotFoundError(f"Dataset not found: {CSV_PATH}")
 
 df = pd.read_csv(CSV_PATH)
+df.columns = df.columns.astype(str).str.strip().str.lower()
 
-df.columns = (
-    df.columns
-    .astype(str)
-    .str.strip()
-    .str.lower()
-)
+required_columns = {"title", "description"}
 
+if not required_columns.issubset(df.columns):
+    raise ValueError(
+        "train.csv must contain 'title' and 'description' columns."
+    )
+
+df = df[["title", "description"]].fillna("")
 df = df.head(1000).reset_index(drop=True)
-
-print(f"Loaded {len(df)} articles.")
-
-
-# ==========================================================
-# CREATE DOCUMENTS
-# ==========================================================
 
 documents = []
 
 for _, row in df.iterrows():
+    title = str(row["title"]).strip()
+    description = str(row["description"]).strip()
 
-    title = str(row["title"])
-    description = str(row["description"])
+    if title or description:
+        documents.append(f"Title: {title}\nArticle: {description}")
 
-    document = title + ". " + description
-
-    documents.append(document)
-
-
-# ==========================================================
-# LOAD EMBEDDING MODEL
-# ==========================================================
-
-print("Loading embedding model...")
-
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
-)
-
-print("Embedding model loaded.")
+if not documents:
+    raise ValueError("No articles found in train.csv.")
 
 
-# ==========================================================
-# CONNECT TO CHROMADB
-# ==========================================================
+# ==================================================
+# 4. LOAD EMBEDDING MODEL
+# ==================================================
 
-client = chromadb.PersistentClient(
-    path=CHROMA_PATH
-)
-
-collection = client.get_or_create_collection(
-    name="articles"
-)
-
-
-# ==========================================================
-# STORE EMBEDDINGS
-# ==========================================================
-
-if collection.count() < len(documents):
-
-    print(
-        "Creating embeddings for 1000 articles..."
-    )
-
-    embeddings = embedding_model.encode(
-        documents,
-        show_progress_bar=True
-    )
-
-    collection.upsert(
-        ids=[
-            str(i)
-            for i in range(len(documents))
-        ],
-        documents=documents,
-        embeddings=embeddings.tolist()
-    )
-
-    print(
-        "Articles stored successfully!"
-    )
-
-else:
-
-    print(
-        "Existing ChromaDB found."
-    )
-
-    print(
-        f"{collection.count()} articles already stored."
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer(
+        "sentence-transformers/all-MiniLM-L6-v2"
     )
 
 
-# ==========================================================
-# LOAD LLAMA 3.2
-# ==========================================================
-
-print("Loading Llama 3.2...")
-
-llm = OllamaLLM(
-    model="llama3.2"
-)
-
-print("Llama 3.2 ready.")
+embedding_model = load_embedding_model()
 
 
-# ==========================================================
-# SEMANTIC SEARCH
-# ==========================================================
+# ==================================================
+# 5. INITIALIZE CHROMADB
+# ==================================================
 
-def search_articles(
-    query,
-    top_k=5
-):
+CHROMA_PATH.mkdir(parents=True, exist_ok=True)
 
-    query_embedding = embedding_model.encode(
-        [query]
-    )[0]
+client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+
+collection = client.get_or_create_collection(name="articles")
+
+
+# ==================================================
+# 6. INDEX ARTICLES
+# ==================================================
+
+# Rebuild the collection if the number of indexed articles differs.
+# For this simple project, the first 1000 dataset rows are indexed.
+
+if collection.count() != len(documents):
+    existing_ids = collection.get().get("ids", [])
+
+    for start in range(0, len(existing_ids), 500):
+        collection.delete(ids=existing_ids[start:start + 500])
+
+    batch_size = 100
+
+    for start in range(0, len(documents), batch_size):
+        batch = documents[start:start + batch_size]
+        embeddings = embedding_model.encode(batch)
+
+        collection.upsert(
+            ids=[
+                str(i)
+                for i in range(start, start + len(batch))
+            ],
+            documents=batch,
+            embeddings=embeddings.tolist(),
+        )
+
+
+# ==================================================
+# 7. SEARCH ARTICLES
+# ==================================================
+
+def search_articles(query, top_k=5):
+    """Return a list of relevant article text documents."""
+
+    query = str(query or "").strip()
+
+    if not query or collection.count() == 0:
+        return []
+
+    query_embedding = embedding_model.encode([query])[0]
 
     results = collection.query(
-        query_embeddings=[
-            query_embedding.tolist()
-        ],
-        n_results=top_k
+        query_embeddings=[query_embedding.tolist()],
+        n_results=min(top_k, collection.count()),
+        include=["documents", "distances"],
     )
 
-    return results
+    return results.get("documents", [[]])[0]
 
 
-# ==========================================================
-# QUESTION ANSWERING
-# ==========================================================
+# ==================================================
+# 8. GENERATE ANSWERS USING RAG
+# ==================================================
 
-def generate_answer(
-    question,
-    documents
-):
+def generate_answer(question, documents):
+    """Answer a question using retrieved article context."""
 
-    context = "\n\n".join(
-        documents
-    )
+    question = str(question or "").strip()
+
+    if not question:
+        return "Please enter a question."
+
+    if not documents:
+        return "No relevant information was found in the knowledge base."
+
+    context_parts = []
+
+    for document in documents:
+        if isinstance(document, str):
+            context_parts.append(document)
+        elif hasattr(document, "page_content"):
+            context_parts.append(document.page_content)
+        else:
+            context_parts.append(str(document))
+
+    context = "\n\n".join(context_parts)
 
     prompt = f"""
-You are ArticleMind, an AI-powered
-multi-article research assistant.
+You are ArticleMind, an AI research assistant.
 
-Answer the user's question using ONLY
-the information provided in the article context.
-
-Do not invent information.
-
-If the answer cannot be found in the context,
-say:
-
-"I could not find enough information in the
-article knowledge base."
+Answer the user's question using the article context below.
+Do not invent facts. If the answer is not in the context,
+explain that the available articles do not provide enough information.
 
 ARTICLE CONTEXT:
-
 {context}
 
 USER QUESTION:
-
 {question}
 
-Give a clear and concise answer.
+Give a clear, helpful answer.
 """
 
-    response = llm.invoke(
-        prompt
-    )
+    try:
+        response = llm.invoke(prompt)
+        return str(response.content).strip()
 
-    return response
+    except Exception as error:
+        print(
+            f"Answer generation error: "
+            f"{type(error).__name__}: {error}"
+        )
+        return (
+            "Unable to generate an answer. Check the Groq API key, "
+            "model availability, and internet connection."
+        )
 
 
-# ==========================================================
-# SHORT ARTICLE SUMMARIZATION
-# ==========================================================
+# ==================================================
+# 9. SUMMARIZE ARTICLES
+# ==================================================
 
-def summarize_article(
-    title,
-    description
-):
+def summarize_article(title, description):
+    """Generate a concise summary of a selected article."""
 
-    article = f"""
-Title: {title}
+    title = str(title or "").strip()
+    description = str(description or "").strip()
 
-Article:
-{description}
-"""
+    if not title and not description:
+        return "No article content was provided."
 
     prompt = f"""
-You are an article summarization assistant.
+You are ArticleMind, an AI research assistant.
 
-Summarize the article below in ONLY 1 or 2
-short sentences.
+Summarize this article in 1–2 concise sentences.
+Use simple language and only the information provided.
+Do not invent facts or findings.
 
-Keep the summary simple, clear and concise.
+ARTICLE TITLE:
+{title}
 
-Use ONLY information from the article.
-
-Do not say that information is missing.
-
-Do not say "I could not find enough information".
-
-Do not create bullet points.
-
-ARTICLE:
-
-{article}
+ARTICLE DESCRIPTION:
+{description}
 
 SHORT SUMMARY:
 """
 
-    response = llm.invoke(
-        prompt
-    )
+    try:
+        response = llm.invoke(prompt)
+        summary = str(response.content).strip()
 
-    return response.strip()
+        if not summary:
+            return "The AI returned an empty summary. Please try again."
+
+        return summary
+
+    except Exception as error:
+        print(
+            f"Summarization error: "
+            f"{type(error).__name__}: {error}"
+        )
+        return (
+            "Unable to summarize the article. "
+            f"Error: {type(error).__name__}: {error}"
+        )
