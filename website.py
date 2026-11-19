@@ -515,12 +515,9 @@ elif page == "📝 Article Summarizer":
     if st.session_state.summary:
         st.markdown("## 💡 AI-Generated Summary")
 
-        st.markdown(
-            f'<div class="answer-card">'
-            f'{st.session_state.summary}'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+       
+        with st.container(border=True):
+    st.write(st.session_state.answer)
 
 
 # --------------------------------------------------
