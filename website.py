@@ -1,16 +1,21 @@
 
 import streamlit as st
 
+# ==================================================
+# 1. PAGE CONFIGURATION
+# ==================================================
+
 st.set_page_config(
-    page_title="ArticleMind | AI Research Assistant",
+    page_title="ArticleMind - AI Research Assistant",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --------------------------------------------------
-# BACKEND CONNECTION
-# --------------------------------------------------
+
+# ==================================================
+# 2. BACKEND CONNECTION
+# ==================================================
 
 try:
     from rag_backend import (
@@ -18,24 +23,26 @@ try:
         generate_answer,
         summarize_article
     )
+
     BACKEND_READY = True
     BACKEND_ERROR = ""
+
 except Exception as error:
     BACKEND_READY = False
     BACKEND_ERROR = str(error)
 
 
-# --------------------------------------------------
-# SESSION STATE
-# --------------------------------------------------
+# ==================================================
+# 3. SESSION STATE
+# ==================================================
 
 defaults = {
     "articles": [],
     "selected_article": 0,
     "answer": "",
-    "answer_sources": [],
+    "sources": [],
     "summary": "",
-    "question": ""
+    "last_question": ""
 }
 
 for key, value in defaults.items():
@@ -43,45 +50,48 @@ for key, value in defaults.items():
         st.session_state[key] = value
 
 
-# --------------------------------------------------
-# HELPER FUNCTIONS
-# --------------------------------------------------
+# ==================================================
+# 4. ARTICLE DETAILS
+# ==================================================
 
 def get_article_details(document):
-    """Extract title and description from retrieved text."""
+
     document = str(document)
 
     title = "Research Article"
     description = document
 
     if "Title:" in document:
-        title_part = document.split("Title:", 1)[1]
-        if "\nArticle:" in title_part:
-            title, description = title_part.split("\nArticle:", 1)
+
+        content = document.split("Title:", 1)[1]
+
+        if "\nArticle:" in content:
+
+            title, description = content.split(
+                "\nArticle:", 1
+            )
+
         else:
-            title = title_part
+            title = content
 
     return title.strip(), description.strip()
 
 
-def show_backend_error():
-    st.error("The AI backend could not be loaded.")
-    st.code(BACKEND_ERROR)
-    st.info(
-        "Check your dependencies and configure GROQ_API_KEY "
-        "in Streamlit Cloud Secrets."
-    )
-
-
-# --------------------------------------------------
-# CUSTOM DESIGN
-# --------------------------------------------------
+# ==================================================
+# 5. CUSTOM CSS DESIGN
+# ==================================================
 
 st.markdown("""
 <style>
+
 .stApp {
-    background: linear-gradient(135deg, #090817 0%, #160d2b 55%, #25103c 100%);
-    color: #f5f3ff;
+    background: linear-gradient(
+        120deg,
+        #090815 0%,
+        #170c29 55%,
+        #260d3c 100%
+    );
+    color: #ffffff;
 }
 
 [data-testid="stHeader"] {
@@ -89,144 +99,152 @@ st.markdown("""
 }
 
 [data-testid="stSidebar"] {
-    background: #100d20;
-    border-right: 1px solid #39304d;
+    background-color: #100d20;
+    border-right: 1px solid #40304f;
 }
 
 [data-testid="stSidebar"] * {
-    color: #f5f3ff;
+    color: #ffffff;
 }
 
 .main-title {
-    font-size: 42px;
-    font-weight: 800;
     color: #ffffff;
+    font-size: 39px;
+    font-weight: 800;
     letter-spacing: -1px;
 }
 
 .subtitle {
-    font-size: 17px;
-    color: #bcb4d5;
+    color: #c5b9d7;
+    font-size: 16px;
+    margin-bottom: 15px;
 }
 
-.section-title {
-    font-size: 25px;
-    font-weight: 700;
+.section-heading {
     color: #ffffff;
+    font-size: 27px;
+    font-weight: 750;
     margin-top: 12px;
+    margin-bottom: 15px;
 }
 
-.article-card {
+div[data-testid="stTextInput"] input {
+    background-color: #292532;
+    color: white;
+    border: 1px solid #51445f;
+    border-radius: 13px;
+    min-height: 52px;
+}
+
+div[data-testid="stTextArea"] textarea {
+    background-color: #292532;
+    color: white;
+    border: 1px solid #51445f;
+    border-radius: 13px;
+}
+
+div.stButton > button {
     background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 17px;
-    padding: 17px;
-    margin-bottom: 10px;
-    color: #f4efff;
+    color: white;
+    border: 1px solid #55465f;
+    border-radius: 16px;
+    min-height: 70px;
+    width: 100%;
+    white-space: normal;
+    font-size: 15px;
+    text-align: left;
+    transition: 0.2s;
+}
+
+div.stButton > button:hover {
+    background: #49305d;
+    border: 1px solid #b78ae0;
+    color: white;
+}
+
+div[data-testid="stFormSubmitButton"] button {
+    background: linear-gradient(
+        90deg,
+        #7540b8,
+        #a44bc8
+    );
+    color: white;
+    border: 1px solid #a77bd0;
+    border-radius: 15px;
+    min-height: 55px;
+    width: 100%;
+    font-size: 17px;
+}
+
+div[data-testid="stFormSubmitButton"] button:hover {
+    background: #914bc5;
+    color: white;
 }
 
 .answer-card {
-    background: rgba(255,255,255,0.96);
-    color: #241a38;
-    padding: 24px;
-    border-radius: 20px;
+    background: #f2f0f7;
+    color: #21172e;
+    border-radius: 22px;
+    padding: 20px;
     line-height: 1.8;
     font-size: 17px;
 }
 
 .source-card {
     background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
-    padding: 13px;
-    margin: 8px 0;
-    color: #eee8ff;
-}
-
-div.stButton > button {
-    background: linear-gradient(90deg, #7444c8, #a34cdb);
-    color: white;
-    border: none;
-    border-radius: 13px;
-    min-height: 45px;
-    font-weight: 650;
-    width: 100%;
-}
-
-div.stButton > button:hover {
-    border: 1px solid #d7b5ff;
-    color: white;
-}
-
-div[data-testid="stTextInput"] input,
-div[data-testid="stTextArea"] textarea {
-    background-color: #29233a;
-    color: white;
-    border: 1px solid #514368;
-    border-radius: 12px;
-}
-
-div[data-testid="stMetric"] {
-    background: rgba(255,255,255,0.07);
-    padding: 16px;
+    border: 1px solid #55445f;
     border-radius: 14px;
-    border: 1px solid #40344f;
-}
-
-div[data-testid="stMetricLabel"] {
-    color: #c7bde0;
-}
-
-div[data-testid="stMetricValue"] {
-    color: white;
-}
-
-.stCaption {
-    color: #bcb4d5;
+    padding: 15px;
+    margin-bottom: 10px;
 }
 
 hr {
-    border-color: #40344f;
+    border-color: #51405e;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
 
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
+# ==================================================
+# 6. SIDEBAR NAVIGATION
+# ==================================================
 
 with st.sidebar:
+
     st.markdown("# 📚 ArticleMind")
+
     st.caption("AI-Powered Research Assistant")
+
     st.divider()
 
     page = st.radio(
         "NAVIGATION",
         [
             "🏠 Home",
-            "🔎 Research Workspace",
+            "🔬 Research Dashboard",
             "📝 Article Summarizer",
             "ℹ️ About"
-        ],
-        label_visibility="visible"
+        ]
     )
 
     st.divider()
 
-    st.markdown("### ✨ AI Features")
-    st.caption("• Semantic article search")
-    st.caption("• AI-powered question answering")
-    st.caption("• Article summarization")
-    st.caption("• Retrieved source references")
+    st.markdown("### ✨ AI FEATURES")
+
+    st.caption("🔎 Semantic Article Search")
+    st.caption("🤖 AI Question Answering")
+    st.caption("📝 Article Summarization")
+    st.caption("📚 Retrieved Sources")
 
     st.divider()
-    st.caption("Powered by Python • ChromaDB • Groq")
+
+    st.caption("Powered by Python, ChromaDB and Groq")
 
 
-# --------------------------------------------------
-# HOME PAGE
-# --------------------------------------------------
+# ==================================================
+# 7. HOME PAGE
+# ==================================================
 
 if page == "🏠 Home":
 
@@ -236,87 +254,109 @@ if page == "🏠 Home":
     )
 
     st.markdown(
-        '<div class="subtitle">Your intelligent AI-powered research companion. '
-        'Search, understand and summarize research articles effortlessly.</div>',
+        '<div class="subtitle">'
+        'Your intelligent AI-powered research companion. '
+        'Search, understand and summarize research articles.'
+        '</div>',
         unsafe_allow_html=True
     )
 
-    st.write("")
     st.divider()
 
-    c1, c2, c3 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-    c1.metric("Platform", "AI Powered")
-    c2.metric("Search", "Semantic")
-    c3.metric("Tools", "3 AI Features")
+    col1.metric("Platform", "AI Powered")
+    col2.metric("Research", "Smart Search")
+    col3.metric("Features", "3 AI Tools")
 
     st.write("")
+
     st.markdown("## 🚀 Explore ArticleMind")
 
-    col1, col2 = st.columns(2)
+    left, right = st.columns(2)
 
-    with col1:
+    with left:
+
         st.markdown("### 🔎 Smart Article Search")
+
         st.write(
-            "Find relevant research articles using "
-            "meaning-based semantic search."
+            "Discover relevant research articles "
+            "using semantic search."
         )
 
         st.markdown("### 🤖 AI Research Assistant")
+
         st.write(
-            "Ask questions and receive answers "
-            "based on retrieved research articles."
+            "Ask questions and get answers "
+            "based on retrieved articles."
         )
 
-    with col2:
+    with right:
+
         st.markdown("### 📝 Article Summarizer")
+
         st.write(
             "Convert lengthy article descriptions "
-            "into short and understandable summaries."
+            "into simple summaries."
         )
 
-        st.markdown("### 📖 Source References")
+        st.markdown("### 📚 Retrieved Sources")
+
         st.write(
-            "See the article titles used to generate "
+            "View the articles used to generate "
             "your AI answers."
         )
 
     if not BACKEND_READY:
+
         st.warning(
-            "AI services are currently unavailable. "
-            "Please configure the backend before using research features."
+            "AI backend is unavailable. "
+            "Check your configuration."
         )
 
 
-# --------------------------------------------------
-# RESEARCH WORKSPACE
-# --------------------------------------------------
+# ==================================================
+# 8. RESEARCH DASHBOARD
+# ==================================================
 
-elif page == "🔎 Research Workspace":
+elif page == "🔬 Research Dashboard":
 
     st.markdown(
-        '<div class="main-title">🔬 Research Workspace</div>',
+        '<div class="main-title">📚 ArticleMind</div>',
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="subtitle">Discover articles and ask your AI research assistant.</div>',
+        '<div class="subtitle">'
+        'Your AI-powered multi-article research assistant'
+        '</div>',
         unsafe_allow_html=True
     )
 
     st.divider()
 
-    left, right = st.columns([0.9, 2.1], gap="large")
+    left, right = st.columns(
+        [0.9, 2.1],
+        gap="large"
+    )
 
-    # LEFT: ARTICLE SEARCH AND RESULTS
+
+    # ----------------------------------------------
+    # LEFT SIDE: ARTICLE SEARCH
+    # ----------------------------------------------
+
     with left:
 
-        st.markdown("## 📚 Research Articles")
+        st.markdown(
+            '<div class="section-heading">📖 Articles</div>',
+            unsafe_allow_html=True
+        )
 
         with st.form("article_search_form"):
+
             search_query = st.text_input(
-                "Search research topics",
-                placeholder="e.g. Artificial Intelligence"
+                "Search Articles",
+                placeholder="Enter your research topic..."
             )
 
             search_button = st.form_submit_button(
@@ -324,13 +364,21 @@ elif page == "🔎 Research Workspace":
             )
 
         if search_button:
+
             if not search_query.strip():
+
                 st.warning("Please enter a research topic.")
+
             elif not BACKEND_READY:
-                show_backend_error()
+
+                st.error("Backend error: " + BACKEND_ERROR)
+
             else:
-                with st.spinner("Searching relevant articles..."):
+
+                with st.spinner("Searching articles..."):
+
                     try:
+
                         results = search_articles(
                             search_query,
                             top_k=10
@@ -339,56 +387,96 @@ elif page == "🔎 Research Workspace":
                         st.session_state.articles = results
                         st.session_state.selected_article = 0
                         st.session_state.answer = ""
-                        st.session_state.answer_sources = []
+                        st.session_state.sources = []
                         st.session_state.summary = ""
 
+                        st.rerun()
+
                     except Exception as error:
-                        st.error(f"Article search failed: {error}")
+
+                        st.error(
+                            f"Article search failed: {error}"
+                        )
 
         articles = st.session_state.articles
 
         if articles:
-            st.success(f"{len(articles)} articles retrieved")
 
-            article_options = list(range(len(articles)))
-
-            selected = st.radio(
-                "Select an article",
-                article_options,
-                index=min(
-                    st.session_state.selected_article,
-                    len(article_options) - 1
-                ),
-                format_func=lambda i: (
-                    f"{i + 1}. {get_article_details(articles[i])[0]}"
-                ),
-                key="article_selector"
+            st.caption(
+                f"📚 {len(articles)} articles found"
             )
 
-            st.session_state.selected_article = selected
+            for i, document in enumerate(articles):
 
-            title, description = get_article_details(
-                articles[selected]
-            )
+                title, description = get_article_details(
+                    document
+                )
 
-            with st.container(border=True):
-                st.markdown("### 📄 Selected Article")
-                st.markdown(f"**{title}**")
-                st.write(description[:650] + (
-                    "..." if len(description) > 650 else ""
-                ))
+                prefix = (
+                    "✓ "
+                    if i == st.session_state.selected_article
+                    else ""
+                )
+
+                if st.button(
+                    f"{prefix}{i + 1}. {title}",
+                    key=f"article_{i}"
+                ):
+
+                    st.session_state.selected_article = i
+                    st.session_state.answer = ""
+                    st.session_state.sources = []
+                    st.session_state.summary = ""
+
+                    st.rerun()
 
         else:
-            st.info("Search for a topic to discover research articles.")
 
-    # RIGHT: AI QUESTION AND ANSWER
+            st.info(
+                "Search for a topic to display research articles."
+            )
+
+
+    # ----------------------------------------------
+    # RIGHT SIDE: AI ASSISTANT
+    # ----------------------------------------------
+
     with right:
 
-        st.markdown("## 🤖 AI Research Assistant")
+        st.markdown(
+            '<div class="section-heading">🤖 AI Research Assistant</div>',
+            unsafe_allow_html=True
+        )
+
+        if articles:
+
+            selected_index = min(
+                st.session_state.selected_article,
+                len(articles) - 1
+            )
+
+            selected_document = articles[selected_index]
+
+            selected_title, selected_description = (
+                get_article_details(selected_document)
+            )
+
+            st.caption(
+                f"Selected article: {selected_title}"
+            )
+
+        else:
+
+            selected_document = None
+
+            st.caption(
+                "Search for articles to start your research."
+            )
 
         with st.form("question_form"):
+
             question = st.text_input(
-                "Ask your research question",
+                "Ask your question",
                 placeholder="What was the main topic of this article?"
             )
 
@@ -397,71 +485,109 @@ elif page == "🔎 Research Workspace":
             )
 
         if ask_button:
+
             if not question.strip():
+
                 st.warning("Please enter a question.")
+
             elif not BACKEND_READY:
-                show_backend_error()
+
+                st.error("Backend error: " + BACKEND_ERROR)
+
+            elif not selected_document:
+
+                st.warning(
+                    "Please search for and select an article first."
+                )
+
             else:
-                context_articles = st.session_state.articles
 
-                if not context_articles:
-                    with st.spinner("Finding relevant articles..."):
-                        context_articles = search_articles(
-                            question,
-                            top_k=5
-                        )
+                with st.spinner(
+                    "ArticleMind is generating your answer..."
+                ):
 
-                if not context_articles:
-                    st.warning("No relevant articles were found.")
-                else:
-                    with st.spinner("ArticleMind is preparing your answer..."):
+                    try:
+
                         answer = generate_answer(
                             question,
-                            context_articles
+                            [selected_document]
                         )
 
                         st.session_state.answer = answer
-                        st.session_state.answer_sources = context_articles
-                        st.session_state.question = question
+
+                        st.session_state.sources = [
+                            selected_document
+                        ]
+
+                        st.session_state.last_question = question
+
+                    except Exception as error:
+
+                        st.error(
+                            f"Answer generation failed: {error}"
+                        )
+
+        # ------------------------------------------
+        # ANSWER SECTION
+        # ------------------------------------------
+
+        st.markdown(
+            '<div class="section-heading">💡 Answer</div>',
+            unsafe_allow_html=True
+        )
 
         if st.session_state.answer:
 
-            st.markdown(
-                '<div class="section-title">💡 Answer</div>',
-                unsafe_allow_html=True
-            )
+            with st.container(border=True):
 
-            st.markdown(
-                f'<div class="answer-card">'
-                f'{st.session_state.answer}'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-            st.markdown("")
-            st.markdown("## 📚 Retrieved Sources")
-
-            for i, document in enumerate(
-                st.session_state.answer_sources
-            ):
-                title, description = get_article_details(document)
-
-                with st.container(border=True):
-                    st.markdown(f"**{i + 1}. {title}**")
-                    st.caption(description[:250] + (
-                        "..." if len(description) > 250 else ""
-                    ))
+                st.write(st.session_state.answer)
 
         else:
+
             st.info(
-                "Your AI-generated answer and retrieved sources "
-                "will appear here."
+                "Your AI-generated answer will appear here."
+            )
+
+        # ------------------------------------------
+        # RETRIEVED SOURCES
+        # ------------------------------------------
+
+        st.markdown(
+            '<div class="section-heading">📚 Retrieved Sources</div>',
+            unsafe_allow_html=True
+        )
+
+        if st.session_state.sources:
+
+            for i, document in enumerate(
+                st.session_state.sources
+            ):
+
+                title, description = get_article_details(
+                    document
+                )
+
+                with st.container(border=True):
+
+                    st.markdown(
+                        f"**{i + 1}. {title}**"
+                    )
+
+                    st.write(
+                        description[:500] +
+                        ("..." if len(description) > 500 else "")
+                    )
+
+        else:
+
+            st.caption(
+                "Retrieved article references will appear here."
             )
 
 
-# --------------------------------------------------
-# ARTICLE SUMMARIZER
-# --------------------------------------------------
+# ==================================================
+# 9. ARTICLE SUMMARIZER
+# ==================================================
 
 elif page == "📝 Article Summarizer":
 
@@ -471,58 +597,81 @@ elif page == "📝 Article Summarizer":
     )
 
     st.markdown(
-        '<div class="subtitle">Turn lengthy research articles into simple summaries.</div>',
+        '<div class="subtitle">'
+        'Generate simple summaries of research articles.'
+        '</div>',
         unsafe_allow_html=True
     )
 
     st.divider()
 
-    if st.session_state.articles:
+    articles = st.session_state.articles
 
-        article_list = st.session_state.articles
+    if not articles:
+
+        st.info(
+            "First search for articles in the Research Dashboard."
+        )
+
+    else:
 
         selected_index = st.selectbox(
-            "Choose a retrieved article",
-            range(len(article_list)),
+            "Select an article",
+            range(len(articles)),
             format_func=lambda i: get_article_details(
-                article_list[i]
+                articles[i]
             )[0]
         )
 
         title, description = get_article_details(
-            article_list[selected_index]
+            articles[selected_index]
         )
 
         st.markdown(f"### 📄 {title}")
-        st.write(description)
+
+        with st.container(border=True):
+
+            st.write(description)
 
         if st.button("✨ Generate Summary"):
+
             if not BACKEND_READY:
-                show_backend_error()
+
+                st.error("Backend error: " + BACKEND_ERROR)
+
             else:
-                with st.spinner("Generating article summary..."):
-                    st.session_state.summary = summarize_article(
-                        title,
-                        description
-                    )
 
-    else:
-        st.info(
-            "First visit Research Workspace and search for articles. "
-            "Your retrieved articles will appear here."
-        )
+                with st.spinner(
+                    "Generating your article summary..."
+                ):
 
-    if st.session_state.summary:
-        st.markdown("## 💡 AI-Generated Summary")
+                    try:
 
-       
-        with st.container(border=True):
-    st.write(st.session_state.answer)
+                        summary = summarize_article(
+                            title,
+                            description
+                        )
+
+                        st.session_state.summary = summary
+
+                    except Exception as error:
+
+                        st.error(
+                            f"Summarization failed: {error}"
+                        )
+
+        if st.session_state.summary:
+
+            st.markdown("## 💡 AI-Generated Summary")
+
+            with st.container(border=True):
+
+                st.write(st.session_state.summary)
 
 
-# --------------------------------------------------
-# ABOUT PAGE
-# --------------------------------------------------
+# ==================================================
+# 10. ABOUT PAGE
+# ==================================================
 
 elif page == "ℹ️ About":
 
@@ -532,19 +681,22 @@ elif page == "ℹ️ About":
     )
 
     st.markdown(
-        '<div class="subtitle">AI-Powered Multi-Article Research Assistant</div>',
+        '<div class="subtitle">'
+        'AI-Powered Multi-Article Research Assistant'
+        '</div>',
         unsafe_allow_html=True
     )
 
     st.divider()
 
     st.markdown("""
-    ### 🎯 Project Overview
+    ## 🎯 Project Overview
 
-    ArticleMind is an AI-powered research assistant designed
-    to help users discover, understand and summarize research articles.
+    ArticleMind is an AI-powered research assistant
+    designed to help users search, understand and
+    summarize multiple research articles.
 
-    ### ⚙️ Technologies Used
+    ## ⚙️ Technologies Used
 
     - Python
     - Streamlit
@@ -553,13 +705,17 @@ elif page == "ℹ️ About":
     - Groq Large Language Model
     - Retrieval-Augmented Generation (RAG)
 
-    ### 🌟 Main Objectives
+    ## 🌟 Main Objectives
 
     - Search relevant research articles.
     - Generate answers using retrieved article content.
     - Summarize lengthy article descriptions.
     - Display retrieved source references.
+
     """)
 
     st.divider()
-    st.caption("ArticleMind | AI-Powered Research Assistant")
+
+    st.caption(
+        "ArticleMind | AI-Powered Research Assistant"
+    )
