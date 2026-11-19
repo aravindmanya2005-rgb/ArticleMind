@@ -1,9 +1,6 @@
 streamlit
 pandas
-langchain
-langchain-community
-langchain-text-splitters
-langchain-ollama
 chromadb
-python-dotenv
 sentence-transformers
+python-dotenv
+langchain-groq
